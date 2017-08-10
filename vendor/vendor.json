@@ -1,0 +1,73 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "V17OmM8gfW+VOfuP4nbaHMwugds=",
+			"path": "github.com/labstack/echo",
+			"revision": "935a60782cbbc55110e7bd4b33120e4567cbee43",
+			"revisionTime": "2017-06-21T15:07:43Z"
+		},
+		{
+			"checksumSHA1": "jaALvhDn0WhqHn3l9gIVJ5rh3t8=",
+			"path": "github.com/labstack/gommon",
+			"revision": "779b8a8b9850a97acba6a3fe20feb628c39e17c1",
+			"revisionTime": "2017-07-12T19:11:37Z"
+		},
+		{
+			"checksumSHA1": "R6DzcBLEP0BONPpsyr+11N7xh5w=",
+			"path": "github.com/labstack/gommon/color",
+			"revision": "779b8a8b9850a97acba6a3fe20feb628c39e17c1",
+			"revisionTime": "2017-07-12T19:11:37Z"
+		},
+		{
+			"checksumSHA1": "uHA6zbtxzJce4r+6uk8zu11qkuk=",
+			"path": "github.com/labstack/gommon/log",
+			"revision": "779b8a8b9850a97acba6a3fe20feb628c39e17c1",
+			"revisionTime": "2017-07-12T19:11:37Z"
+		},
+		{
+			"checksumSHA1": "VdvWgxaqcC3pKk/6Q7dRfH7THjM=",
+			"path": "github.com/mattn/go-colorable",
+			"revision": "6c0fd4aa6ec5818d5e3ea9e03ae436972a6c5a9a",
+			"revisionTime": "2017-08-02T01:54:08Z"
+		},
+		{
+			"checksumSHA1": "U6lX43KDDlNOn+Z0Yyww+ZzHfFo=",
+			"path": "github.com/mattn/go-isatty",
+			"revision": "fc9e8d8ef48496124e79ae0df75490096eccf6fe",
+			"revisionTime": "2017-03-22T23:44:13Z"
+		},
+		{
+			"checksumSHA1": "LTOa3BADhwvT0wFCknPueQALm8I=",
+			"path": "github.com/valyala/bytebufferpool",
+			"revision": "e746df99fe4a3986f4d4f79e13c1e0117ce9c2f7",
+			"revisionTime": "2016-08-17T18:16:52Z"
+		},
+		{
+			"checksumSHA1": "gtG8jeB0fcTmKZf+6Vbcoa6nfec=",
+			"path": "github.com/valyala/fasttemplate",
+			"revision": "dcecefd839c4193db0d35b88ec65b4c12d360ab0",
+			"revisionTime": "2017-02-24T21:24:29Z"
+		},
+		{
+			"checksumSHA1": "g//nyy0VRVeQkHtxyWMaJL25rPU=",
+			"path": "golang.org/x/crypto/acme",
+			"revision": "b176d7def5d71bdd214203491f89843ed217f420",
+			"revisionTime": "2017-07-23T04:49:35Z"
+		},
+		{
+			"checksumSHA1": "TrKJW+flz7JulXU3sqnBJjGzgQc=",
+			"path": "golang.org/x/crypto/acme/autocert",
+			"revision": "b176d7def5d71bdd214203491f89843ed217f420",
+			"revisionTime": "2017-07-23T04:49:35Z"
+		},
+		{
+			"checksumSHA1": "Ws4nftdYhMEd8vZPFv1CMy1N8Nw=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "e42485b6e20ae7d2304ec72e535b103ed350cc02",
+			"revisionTime": "2017-08-09T17:40:02Z"
+		}
+	],
+	"rootPath": "github.com/shelomentsevd/neuron-interview-task"
+}
