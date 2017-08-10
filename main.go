@@ -23,23 +23,76 @@ func newRequestHandler(timeout time.Duration) requestHandler {
 }
 
 func (rh *requestHandler) createStream(c echo.Context) error {
-	return c.JSON(http.StatusOK, "OK")
+	ID, err := rh.streamStorage.Create()
+	if err != nil {
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	c.Response().Header().Add("Location", "/api/stream/"+ID)
+	return c.NoContent(http.StatusCreated)
 }
 
 func (rh *requestHandler) getList(c echo.Context) error {
-	return c.JSON(http.StatusOK, "OK")
+	streams, err := rh.streamStorage.List()
+	if err != nil {
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	return c.JSON(http.StatusOK, streams)
 }
 
 func (rh *requestHandler) getStream(c echo.Context) error {
-	return c.JSON(http.StatusOK, "OK")
+	stream, err := rh.streamStorage.Get(c.Param("ID"))
+
+	switch err {
+	case StreamStorage.ErrStreamNotFound:
+		return c.NoContent(http.StatusNotFound)
+	case nil:
+	default:
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	return c.JSON(http.StatusOK, stream)
 }
 
 func (rh *requestHandler) runStream(c echo.Context) error {
-	return c.JSON(http.StatusOK, "OK")
+	err := rh.streamStorage.Run(c.Param("ID"))
+	switch err {
+	case StreamStorage.ErrStreamNotFound:
+		return c.NoContent(http.StatusNotFound)
+	case StreamStorage.ErrStreamAlreadyActive, StreamStorage.ErrStreamFinished:
+		// TODO: Returns error in json
+		return c.NoContent(http.StatusBadRequest)
+	case nil:
+	default:
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	// TODO: No content?
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (rh *requestHandler) stopStream(c echo.Context) error {
-	return c.JSON(http.StatusOK, "OK")
+	err := rh.streamStorage.Stop(c.Param("ID"))
+	// TODO: Common error processing?
+	switch err {
+	case StreamStorage.ErrStreamNotFound:
+		return c.NoContent(http.StatusNotFound)
+	case StreamStorage.ErrStreamIsNotActive, StreamStorage.ErrStreamAlreadyInterrupted, StreamStorage.ErrStreamFinished:
+		// TODO: Returns error in json
+		return c.NoContent(http.StatusBadRequest)
+	case nil:
+	default:
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	// TODO: No content?
+	return c.NoContent(http.StatusNoContent)
 }
 
 func main() {
