@@ -119,7 +119,7 @@ func NewStreamStorage(timeout time.Duration) StreamStorage {
 func (ss *StreamStorage) List() ([]Stream, error) {
 	ss.m.RLock()
 	defer ss.m.RUnlock()
-	streams := make([]Stream, len(ss.streams))
+	streams := make([]Stream, 0)
 	for _, stream := range ss.streams {
 		streams = append(streams, stream)
 	}
