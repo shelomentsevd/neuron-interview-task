@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo"
@@ -95,24 +98,64 @@ func (rh *requestHandler) stopStream(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (rh *requestHandler) finishStream(c echo.Context) error {
+	err := rh.streamStorage.Finish(c.Param("ID"))
+
+	switch err {
+	case StreamStorage.ErrStreamNotFound:
+		return c.NoContent(http.StatusNotFound)
+	case StreamStorage.ErrStreamIsNotInterrupted:
+		// TODO: Returns error in json
+		return c.NoContent(http.StatusBadRequest)
+	case nil:
+	default:
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 func main() {
-	// TODO: timeout should be paramater
-	handler := newRequestHandler(time.Second * 10)
+	var port string
+	var timeout int
+	flag.StringVar(&port, "port", "", "Server port")
+	flag.IntVar(&timeout, "timeout", -1, "Stream interrupted state timeout in seconds")
+	flag.Parse()
+
+	if timeout < 0 {
+		env := os.Getenv("TIMEOUT")
+		var err error
+		timeout, err = strconv.Atoi(env)
+		if err != nil || timeout < 0 {
+			log.Fatal("Invalid timeout. You can specify timeout through enviroment variable TIMEOUT or through flag -timeout.")
+		}
+	}
+
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
+
+	if _, err := strconv.Atoi(port); err != nil {
+		log.Fatal("Invalid port number. You can specify port through enviroment variable PORT or through flag -port.")
+	}
+
+	handler := newRequestHandler(time.Second * time.Duration(timeout))
 	// Setup
 	e := echo.New()
 	e.Logger.SetLevel(log.INFO)
 
 	// TODO: OPTIONS
-	// TODO: groups?
 	e.GET("/api/stream", handler.getList)
 	e.GET("/api/stream/:ID", handler.getStream)
 	e.POST("/api/stream", handler.createStream)
 	e.PUT("/api/stream/:ID/run", handler.runStream)
 	e.PUT("/api/stream/:ID/stop", handler.stopStream)
+	e.PUT("/api/stream/:ID/finish", handler.finishStream)
 
 	// Start server
 	go func() {
-		if err := e.Start(":1323"); err != nil {
+		if err := e.Start(fmt.Sprintf(":%s", port)); err != nil {
 			e.Logger.Info("shutting down the server")
 		}
 	}()

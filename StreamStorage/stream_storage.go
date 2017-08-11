@@ -22,6 +22,7 @@ var (
 	// Stream errors
 	ErrStreamAlreadyActive      = errors.New("stream: stream already active")
 	ErrStreamAlreadyInterrupted = errors.New("stream: stream already interrupted")
+	ErrStreamAlreadyFinished    = errors.New("stream: stream already finished")
 	ErrStreamFinished           = errors.New("stream: stream finished")
 	ErrStreamIsNotActive        = errors.New("stream: stream is not active")
 	ErrStreamIsNotInterrupted   = errors.New("stream: stream is not interrupted")
@@ -48,12 +49,10 @@ func NewStream() Stream {
 // panics if state is unknown.
 func (s *Stream) ToActive() error {
 	switch s.State {
-	case created:
+	case created, interrupted:
 		s.State = active
 	case active:
 		return ErrStreamAlreadyActive
-	case interrupted:
-		s.State = active
 	case finished:
 		return ErrStreamFinished
 	default:
@@ -84,12 +83,20 @@ func (s *Stream) ToInterrupted() error {
 	return nil
 }
 
-// ToFinished swithces stream to finished modestate from interrupted state in other states returns error.
+// ToFinished swithces stream to finished modestate from active or interrupted state or returns error,
+// panics if state is unknown.
 func (s *Stream) ToFinished() error {
-	if s.State != interrupted {
-		return ErrStreamIsNotInterrupted
+	switch s.State {
+	case created:
+		return ErrStreamIsNotActive
+	case active, interrupted:
+		s.State = finished
+	case finished:
+		return ErrStreamAlreadyFinished
+	default:
+		// Should never happen
+		log.Panic(s.State)
 	}
-	s.State = finished
 
 	return nil
 }
