@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +16,16 @@ import (
 	"github.com/labstack/gommon/log"
 	"github.com/shelomentsevd/neuron-interview-task/StreamStorage"
 )
+
+const (
+	contentType        = "Content-Type"
+	contentTypeJSONAPI = "application/vnd.api+json"
+)
+
+type jsonAPIError struct {
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+}
 
 type requestHandler struct {
 	streamStorage StreamStorage.StreamStorage
@@ -26,14 +38,44 @@ func newRequestHandler(timeout time.Duration) requestHandler {
 }
 
 func (rh *requestHandler) createStream(c echo.Context) error {
-	ID, err := rh.streamStorage.Create()
+	content := c.Request().Header.Get(contentType)
+	if content != contentTypeJSONAPI {
+		return c.NoContent(http.StatusUnsupportedMediaType)
+	}
+	body := c.Request().Body
+	defer body.Close()
+
+	// Read body
+	bytes, err := ioutil.ReadAll(body)
 	if err != nil {
 		log.Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	c.Response().Header().Add("Location", "/api/stream/"+ID)
-	return c.NoContent(http.StatusCreated)
+	// Decode json to Stream object
+	var stream StreamStorage.Stream
+	err = json.Unmarshal(bytes, stream)
+	if err != nil {
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	if stream.Data.Type != StreamStorage.StreamType {
+		return c.JSON(http.StatusBadRequest, jsonAPIError{
+			Title:  "Wron type",
+			Detail: fmt.Sprintf("Type %s is not accepted", stream.Data.Type),
+		})
+	}
+
+	stream, err = rh.streamStorage.Create()
+	if err != nil {
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	c.Response().Header().Add("Location", "/api/stream/"+stream.Data.ID)
+	c.Response().Header().Add(contentType, contentTypeJSONAPI)
+	return c.JSON(http.StatusCreated, stream)
 }
 
 func (rh *requestHandler) getList(c echo.Context) error {
@@ -43,77 +85,110 @@ func (rh *requestHandler) getList(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	c.Response().Header().Add(contentType, contentTypeJSONAPI)
 	return c.JSON(http.StatusOK, streams)
 }
 
 func (rh *requestHandler) getStream(c echo.Context) error {
-	stream, err := rh.streamStorage.Get(c.Param("ID"))
+	ID := c.Param("ID")
+	stream, err := rh.streamStorage.Get(ID)
 
 	switch err {
 	case StreamStorage.ErrStreamNotFound:
-		return c.NoContent(http.StatusNotFound)
+		return c.JSON(http.StatusNotFound, jsonAPIError{
+			Title:  StreamStorage.ErrStreamNotFound.Error(),
+			Detail: fmt.Sprintf("Stream with ID: %s not found", ID),
+		})
 	case nil:
 	default:
 		log.Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	c.Response().Header().Add(contentType, contentTypeJSONAPI)
 	return c.JSON(http.StatusOK, stream)
 }
 
-func (rh *requestHandler) runStream(c echo.Context) error {
-	err := rh.streamStorage.Run(c.Param("ID"))
+func (rh *requestHandler) changeStream(c echo.Context) error {
+	content := c.Request().Header.Get(contentType)
+	if content != contentTypeJSONAPI {
+		return c.NoContent(http.StatusUnsupportedMediaType)
+	}
+
+	ID := c.Param("ID")
+	stream, err := rh.streamStorage.Get(ID)
+
 	switch err {
 	case StreamStorage.ErrStreamNotFound:
-		return c.NoContent(http.StatusNotFound)
-	case StreamStorage.ErrStreamAlreadyActive, StreamStorage.ErrStreamFinished:
-		// TODO: Returns error in json
-		return c.NoContent(http.StatusBadRequest)
+		return c.JSON(http.StatusNotFound, jsonAPIError{
+			Title:  StreamStorage.ErrStreamNotFound.Error(),
+			Detail: fmt.Sprintf("Stream with ID: %s not found", ID),
+		})
 	case nil:
 	default:
 		log.Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	// TODO: No content?
-	return c.NoContent(http.StatusNoContent)
-}
+	body := c.Request().Body
+	defer body.Close()
 
-func (rh *requestHandler) stopStream(c echo.Context) error {
-	err := rh.streamStorage.Stop(c.Param("ID"))
-	// TODO: Common error processing?
-	switch err {
-	case StreamStorage.ErrStreamNotFound:
-		return c.NoContent(http.StatusNotFound)
-	case StreamStorage.ErrStreamIsNotActive, StreamStorage.ErrStreamAlreadyInterrupted, StreamStorage.ErrStreamFinished:
-		// TODO: Returns error in json
-		return c.NoContent(http.StatusBadRequest)
-	case nil:
-	default:
+	// Read body
+	bytes, err := ioutil.ReadAll(body)
+	if err != nil {
 		log.Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	// TODO: No content?
-	return c.NoContent(http.StatusNoContent)
-}
-
-func (rh *requestHandler) finishStream(c echo.Context) error {
-	err := rh.streamStorage.Finish(c.Param("ID"))
-
-	switch err {
-	case StreamStorage.ErrStreamNotFound:
-		return c.NoContent(http.StatusNotFound)
-	case StreamStorage.ErrStreamIsNotInterrupted:
-		// TODO: Returns error in json
-		return c.NoContent(http.StatusBadRequest)
-	case nil:
-	default:
+	var patch StreamStorage.Stream
+	if err := json.Unmarshal(bytes, patch); err != nil {
 		log.Error(err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	if patch.Data.ID != ID || patch.Data.Type != StreamStorage.StreamType {
+		return c.JSON(http.StatusBadRequest, jsonAPIError{
+			Title:  "id or type is missing",
+			Detail: "Every resource object MUST contain an id member and a type member.",
+		})
+	}
+
+	switch patch.Data.Attributes.State {
+	case StreamStorage.Active:
+		err = rh.streamStorage.Run(ID)
+	case StreamStorage.Finished:
+		err = rh.streamStorage.Finish(ID)
+	case StreamStorage.Interrupted:
+		err = rh.streamStorage.Stop(ID)
+	default:
+		return c.JSON(http.StatusBadRequest, jsonAPIError{
+			Title:  "Wrong state for update",
+			Detail: fmt.Sprintf("%s is a wrong state for update", patch.Data.Attributes.State),
+		})
+	}
+
+	switch err {
+	case StreamStorage.ErrStreamWrongStateSwitch:
+		return c.JSON(http.StatusForbidden, jsonAPIError{
+			Title:  err.Error(),
+			Detail: fmt.Sprintf("Stream %s can't switch to state %s", ID, patch.Data.Attributes.State),
+		})
+	case StreamStorage.ErrStreamNotFound:
+		return c.NoContent(http.StatusNotFound)
+	case StreamStorage.ErrStreamUnknowState:
+		return c.JSON(http.StatusForbidden, jsonAPIError{
+			Title:  err.Error(),
+			Detail: fmt.Sprintf("Stream %s can't switch to unknow state %s", ID, patch.Data.Attributes.State),
+		})
+	case nil:
+	default:
+		log.Error(err)
+		return c.NoContent(http.StatusInternalServerError)
+
+	}
+
+	c.Response().Header().Add(contentType, contentTypeJSONAPI)
+	return c.JSON(http.StatusOK, stream)
 }
 
 func main() {
@@ -149,9 +224,7 @@ func main() {
 	e.GET("/api/stream", handler.getList)
 	e.GET("/api/stream/:ID", handler.getStream)
 	e.POST("/api/stream", handler.createStream)
-	e.PUT("/api/stream/:ID/run", handler.runStream)
-	e.PUT("/api/stream/:ID/stop", handler.stopStream)
-	e.PUT("/api/stream/:ID/finish", handler.finishStream)
+	e.PATCH("/api/stream/:ID", handler.changeStream)
 
 	// Start server
 	go func() {

@@ -11,53 +11,75 @@ import (
 
 // Stream states
 const (
-	created     = "created"
-	active      = "active"
-	interrupted = "interrupted"
-	finished    = "finished"
+	Created     = "created"
+	Active      = "active"
+	Interrupted = "interrupted"
+	Finished    = "finished"
 )
 
-// Errors
+// Stream type
+const StreamType = "stream"
+
 var (
-	// Stream errors
-	ErrStreamAlreadyActive      = errors.New("stream: stream already active")
-	ErrStreamAlreadyInterrupted = errors.New("stream: stream already interrupted")
-	ErrStreamAlreadyFinished    = errors.New("stream: stream already finished")
-	ErrStreamFinished           = errors.New("stream: stream finished")
-	ErrStreamIsNotActive        = errors.New("stream: stream is not active")
-	ErrStreamIsNotInterrupted   = errors.New("stream: stream is not interrupted")
+	ErrStreamFinished         = errors.New("stream error: stream finished")
+	ErrStreamUnknowState      = errors.New("stream error: unknow stream state")
+	ErrStreamWrongStateSwitch = errors.New("stream error: wrong state switch")
 	// Stream storage errors
-	ErrStreamNotFound = errors.New("stream storage: stream not found")
+	ErrStreamNotFound = errors.New("stream storage error: stream not found")
 )
+
+type StreamAttributes struct {
+	Created string `json:"created,omitempty"`
+	State   string `json:"state,omitempty"`
+}
+
+type StreamData struct {
+	ID         string           `json:"id,omitempty"`
+	Type       string           `json:"type"`
+	Attributes StreamAttributes `json:"attributes"`
+}
 
 type Stream struct {
-	Created string `json:"created"`
-	ID      string `json:"id"`
-	State   string `json:"state"`
+	Data StreamData `json:"data"`
+}
+
+type StreamList struct {
+	Data []StreamData `json:"data"`
 }
 
 // NewStream creates stream with UUID and state "created"
 func NewStream() Stream {
 	return Stream{
-		State:   created,
-		Created: time.Now().Format(time.RFC3339),
-		ID:      uuid.NewV4().String(),
+		Data: StreamData{
+			ID:   uuid.NewV4().String(),
+			Type: StreamType,
+			Attributes: StreamAttributes{
+				State:   Created,
+				Created: time.Now().Format(time.RFC3339),
+			},
+		},
+	}
+}
+
+// NewStreamList creates empty stream list
+func newStreamList() StreamList {
+	return StreamList{
+		Data: make([]StreamData, 0),
 	}
 }
 
 // ToActive switches stream to active state from created/interrupted state or returns error,
 // panics if state is unknown.
 func (s *Stream) ToActive() error {
-	switch s.State {
-	case created, interrupted:
-		s.State = active
-	case active:
-		return ErrStreamAlreadyActive
-	case finished:
+	switch s.Data.Attributes.State {
+	case Created, Interrupted:
+		s.Data.Attributes.State = Active
+	case Active:
+	case Finished:
 		return ErrStreamFinished
 	default:
 		// Should never happen
-		log.Panic(s.State)
+		log.Panic(s.Data.Attributes.State)
 	}
 
 	return nil
@@ -66,18 +88,17 @@ func (s *Stream) ToActive() error {
 // ToInterrupted switches stream to interrupted state from active state or returns error,
 // panics if state is unknown.
 func (s *Stream) ToInterrupted() error {
-	switch s.State {
-	case created:
-		return ErrStreamIsNotActive
-	case active:
-		s.State = interrupted
-	case interrupted:
-		return ErrStreamAlreadyInterrupted
-	case finished:
+	switch s.Data.Attributes.State {
+	case Created:
+		return ErrStreamWrongStateSwitch
+	case Active:
+		s.Data.Attributes.State = Interrupted
+	case Interrupted:
+	case Finished:
 		return ErrStreamFinished
 	default:
 		// Should never happen
-		log.Panic(s.State)
+		log.Panic(s.Data.Attributes.State)
 	}
 
 	return nil
@@ -86,16 +107,15 @@ func (s *Stream) ToInterrupted() error {
 // ToFinished swithces stream to finished modestate from active or interrupted state or returns error,
 // panics if state is unknown.
 func (s *Stream) ToFinished() error {
-	switch s.State {
-	case created:
-		return ErrStreamIsNotActive
-	case active, interrupted:
-		s.State = finished
-	case finished:
-		return ErrStreamAlreadyFinished
+	switch s.Data.Attributes.State {
+	case Created:
+		return ErrStreamWrongStateSwitch
+	case Active, Interrupted:
+		s.Data.Attributes.State = Finished
+	case Finished:
 	default:
 		// Should never happen
-		log.Panic(s.State)
+		log.Panic(s.Data.Attributes.State)
 	}
 
 	return nil
@@ -123,24 +143,24 @@ func NewStreamStorage(timeout time.Duration) StreamStorage {
 }
 
 // List returns streams list
-func (ss *StreamStorage) List() ([]Stream, error) {
+func (ss *StreamStorage) List() (StreamList, error) {
 	ss.m.RLock()
 	defer ss.m.RUnlock()
-	streams := make([]Stream, 0)
+	streams := newStreamList()
 	for _, stream := range ss.streams {
-		streams = append(streams, stream)
+		streams.Data = append(streams.Data, stream.Data)
 	}
 	return streams, nil
 }
 
 // Create creates stream and returns id
-func (ss *StreamStorage) Create() (string, error) {
+func (ss *StreamStorage) Create() (Stream, error) {
 	ss.m.Lock()
 	defer ss.m.Unlock()
 	stream := NewStream()
-	ss.streams[stream.ID] = stream
+	ss.streams[stream.Data.ID] = stream
 
-	return stream.ID, nil
+	return stream, nil
 }
 
 // Get returns stream to client
